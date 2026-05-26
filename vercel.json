@@ -1,10 +1,10 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/steam-callback",  "destination": "/api/steam-callback.js"  },
-    { "source": "/steam-profile",   "destination": "/api/steam-profile.js"   },
-    { "source": "/steam-inventory", "destination": "/api/steam-inventory.js" },
-    { "source": "/ranking-api",     "destination": "/api/ranking.js"         },
-    { "source": "/search-api",      "destination": "/api/search.js"          }
+    { "source": "/steam-callback",  "destination": "/api/steam-callback"  },
+    { "source": "/steam-profile",   "destination": "/api/steam-profile"   },
+    { "source": "/steam-inventory", "destination": "/api/steam-inventory" },
+    { "source": "/ranking-api",     "destination": "/api/ranking"         },
+    { "source": "/search-api",      "destination": "/api/search"          }
   ]
 }
