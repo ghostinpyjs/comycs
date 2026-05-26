@@ -17,7 +17,7 @@ async function initPlayerPage() {
 async function searchAndLoad(nick) {
   showLoading(`Pesquisando "${nick}"...`);
   try {
-    const res  = await fetch(`/functions/search?nick=${encodeURIComponent(nick)}`);
+    const res  = await fetch(`/search-api?nick=${encodeURIComponent(nick)}`);
     const data = await res.json();
 
     if (data.results && data.results.length === 1) {
@@ -63,7 +63,7 @@ async function loadPlayerById(steamId) {
   showLoading('Carregando perfil...');
   try {
     // Load profile + stats
-    const profRes  = await fetch(`/functions/steam-profile?steamid=${encodeURIComponent(steamId)}`);
+    const profRes  = await fetch(`/steam-profile?steamid=${encodeURIComponent(steamId)}`);
     const profData = await profRes.json();
     if (profData.error) throw new Error(profData.error);
 
@@ -233,7 +233,7 @@ function renderProfile(data) {
 
 async function loadInventory(steamId) {
   try {
-    const res  = await fetch(`/functions/steam-inventory?steamid=${encodeURIComponent(steamId)}`);
+    const res  = await fetch(`/steam-inventory?steamid=${encodeURIComponent(steamId)}`);
     const data = await res.json();
 
     document.getElementById('inv-loading')?.classList.add('hidden');
@@ -295,7 +295,7 @@ async function initMyProfile() {
       refreshBtn.disabled = true;
       refreshBtn.textContent = 'Atualizando...';
       try {
-        const res  = await fetch(`/functions/steam-profile?steamid=${user.steamid}&refresh=1`);
+        const res  = await fetch(`/steam-profile?steamid=${user.steamid}&refresh=1`);
         const data = await res.json();
         if (!data.error) AUTH.setUser(data);
         window.location.reload();

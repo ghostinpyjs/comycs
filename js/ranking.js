@@ -31,7 +31,7 @@ async function loadRanking(orderBy) {
   document.getElementById('ranking-loading')?.classList.remove('hidden');
 
   try {
-    const res  = await fetch(`/functions/ranking?orderBy=${orderBy}`);
+    const res  = await fetch(`/ranking-api?orderBy=${orderBy}`);
     const data = await res.json();
     allPlayers = data.players || [];
 

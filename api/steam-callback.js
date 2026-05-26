@@ -4,7 +4,8 @@
 import { createClient } from "@vercel/kv";
 
 export default async function handler(req, res) {
-  const params = new URLSearchParams(req.url.split("?")[1] || "");
+  const rawUrl = req.url.includes("?") ? req.url : `/?`;
+  const params = new URLSearchParams(rawUrl.split("?")[1] || "");
   const claimed_id = params.get("openid.claimed_id") || "";
   const steamId = claimed_id.match(/\/id\/(\d+)$/)?.[1];
 
