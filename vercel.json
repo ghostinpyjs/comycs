@@ -1,5 +1,7 @@
 {
   "version": 2,
+  "cleanUrls": false,
+  "trailingSlash": false,
   "rewrites": [
     { "source": "/steam-callback",  "destination": "/api/steam-callback"  },
     { "source": "/steam-profile",   "destination": "/api/steam-profile"   },
