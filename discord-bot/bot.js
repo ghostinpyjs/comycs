@@ -63,7 +63,7 @@ async function registerCommands() {
 client.once("ready", async () => {
   console.log(`Bot online como ${client.user.tag}`);
   await registerCommands();
-  client.user.setActivity("CS2HUB | /lfg", { type: 0 });
+  client.user.setActivity("CS2HUB | /jogar", { type: 0 });
 });
 
 client.on("interactionCreate", async interaction => {
@@ -187,8 +187,8 @@ client.on("interactionCreate", async interaction => {
     }
   }
 
-  // ─── /lfg ──────────────────────────────────────────────
-  else if (commandName === "lfg") {
+  // ─── /jogar ──────────────────────────────────────────────
+  else if (commandName === "jogar") {
     const modo  = interaction.options.getString("modo");
     const rank  = interaction.options.getString("rank") || "Não informado";
     const obs   = interaction.options.getString("obs")  || "";
