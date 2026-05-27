@@ -1,4 +1,4 @@
-// main.js — shared utilities + home page
+// main.js
 
 const STEAM = {
   async getProfile(steamId) {
