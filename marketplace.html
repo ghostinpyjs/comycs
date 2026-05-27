@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marketplace — CS2HUB</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .market-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1.2rem;margin-top:1.5rem}
+  .market-card{background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:10px;overflow:hidden;transition:border-color .2s,transform .2s;cursor:pointer}
+  .market-card:hover{border-color:var(--orange);transform:translateY(-3px)}
+  .market-img{background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;height:130px;padding:1rem}
+  .market-img img{max-height:100%;max-width:100%;object-fit:contain}
+  .market-info{padding:.8rem 1rem}
+  .market-name{font-size:.85rem;font-weight:600;margin-bottom:.3rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .market-seller{font-size:.75rem;color:var(--text-dim);margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem}
+  .market-seller img{width:16px;height:16px;border-radius:2px}
+  .market-price{font-size:1.1rem;font-weight:700;color:var(--orange)}
+  .market-price-brl{font-size:.75rem;color:var(--text-dim)}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:12px;padding:2rem;width:90%;max-width:480px;position:relative}
+  .modal-close{position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--text-dim);font-size:1.3rem;cursor:pointer}
+  .form-group{margin-bottom:1rem}
+  .form-group label{display:block;font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);margin-bottom:.4rem}
+  .form-group input,.form-group textarea,.form-group select{width:100%;padding:.6rem .9rem;background:var(--bg-secondary);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);font-size:.9rem;box-sizing:border-box}
+  .form-group textarea{height:80px;resize:vertical}
+  .filter-bar{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+  .filter-bar input{padding:.5rem 1rem;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:6px;color:var(--text-primary);flex:1;min-width:200px}
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <a href="/" class="nav-logo"><div class="logo-icon">CS</div>CS2<span class="accent">HUB</span></a>
+  <ul class="nav-links">
+    <li><a href="/">Home</a></li>
+    <li><a href="/ranking.html">Ranking</a></li>
+    <li><a href="/marketplace.html" class="active">Marketplace</a></li>
+  </ul>
+  <form class="nav-search" id="nav-search-form">
+    <input id="nav-search-input" type="text" placeholder="Buscar jogador...">
+    <button type="submit">🔍</button>
+  </form>
+  <div id="nav-login-area"></div>
+</nav>
+
+<main style="position:relative;z-index:1">
+  <div class="section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
+      <div>
+        <p style="font-family:'Share Tech Mono',monospace;font-size:.78rem;letter-spacing:.2em;color:var(--orange);text-transform:uppercase">// Compra e Venda</p>
+        <h1 class="section-title" style="font-size:2rem">Market<span class="accent">place</span></h1>
+      </div>
+      <button class="btn btn-primary" id="btn-anunciar" onclick="abrirModal()" style="display:none">+ Anunciar Item</button>
+    </div>
+
+    <div class="filter-bar">
+      <input id="market-search" type="text" placeholder="Buscar item...">
+    </div>
+
+    <div id="market-loading" class="loading-wrap"><div class="spinner"></div><span class="loading-text">Carregando anúncios...</span></div>
+    <div id="market-empty" class="hidden"><div class="empty-state"><div class="empty-icon">🏪</div><p>Nenhum anúncio ainda. Seja o primeiro!</p></div></div>
+    <div id="market-grid" class="market-grid"></div>
+  </div>
+</main>
+
+<!-- Modal anunciar -->
+<div class="modal-overlay" id="modal-anunciar">
+  <div class="modal">
+    <button class="modal-close" onclick="fecharModal()">✕</button>
+    <h2 style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.5rem;margin-bottom:1.5rem">Anunciar Item</h2>
+    <div class="form-group">
+      <label>Selecionar item do inventário</label>
+      <select id="select-item"><option value="">Carregando inventário...</option></select>
+    </div>
+    <div class="form-group">
+      <label>Preço (USD)</label>
+      <input type="number" id="input-price" placeholder="Ex: 5.99" step="0.01" min="0">
+    </div>
+    <div class="form-group">
+      <label>Descrição (opcional)</label>
+      <textarea id="input-desc" placeholder="Descreva o item, condições de venda..."></textarea>
+    </div>
+    <div id="modal-error" class="hidden" style="color:var(--red);font-size:.85rem;margin-bottom:1rem"></div>
+    <button class="btn btn-primary" onclick="publicarAnuncio()" style="width:100%">Publicar Anúncio</button>
+  </div>
+</div>
+
+<footer><p>CS2HUB — Não afiliado com <span>Valve</span> ou <span>Steam</span>.</p></footer>
+<script src="/js/auth.js"></script>
+<script src="/js/main.js"></script>
+<script src="/js/marketplace.js"></script>
+</body>
+</html>
