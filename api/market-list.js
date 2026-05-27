@@ -4,21 +4,34 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   try {
     const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-    const { data, error } = await db
+
+    const { data: listings, error } = await db
       .from("marketplace")
-      .select("*, players(nick, avatar)")
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    const listings = (data || []).map(l => ({
+    // Buscar nicks e avatares dos vendedores
+    const steamIds = [...new Set((listings || []).map(l => l.steam_id))];
+    let players = [];
+    if (steamIds.length) {
+      const { data } = await db.from("players").select("steam_id, nick, avatar").in("steam_id", steamIds);
+      players = data || [];
+    }
+
+    const playerMap = {};
+    players.forEach(p => playerMap[p.steam_id] = p);
+
+    const result = (listings || []).map(l => ({
       ...l,
-      nick:   l.players?.nick,
-      avatar: l.players?.avatar,
+      nick:   playerMap[l.steam_id]?.nick   || "Jogador",
+      avatar: playerMap[l.steam_id]?.avatar || "",
     }));
 
-    return res.status(200).json({ listings });
+    return res.status(200).json({ listings: result });
   } catch (err) {
+    console.error("market-list error:", err);
     return res.status(500).json({ error: err.message });
   }
 }
