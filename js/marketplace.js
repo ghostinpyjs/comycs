@@ -11,8 +11,7 @@ async function initMarketplace() {
 
   document.getElementById('market-search')?.addEventListener('input', e => {
     const q = e.target.value.toLowerCase();
-    const cards = document.querySelectorAll('.market-card');
-    cards.forEach(c => {
+    document.querySelectorAll('.market-card').forEach(c => {
       c.style.display = c.dataset.name?.toLowerCase().includes(q) ? '' : 'none';
     });
   });
@@ -60,7 +59,7 @@ async function carregarAnuncios() {
         <div class="market-info">
           <div class="market-name" title="${escHtml(l.item_name)}">${escHtml(l.item_name)}</div>
           <div class="market-seller">
-            ${l.avatar ? `<img src="${l.avatar}" onerror="this.style.display='none'">` : ''}
+            ${l.avatar ? `<img src="${l.avatar}" style="width:16px;height:16px;border-radius:2px" onerror="this.style.display='none'">` : ''}
             ${escHtml(l.nick || 'Jogador')}
           </div>
           ${l.description ? `<div style="font-size:.78rem;color:var(--text-dim);margin-bottom:.5rem">${escHtml(l.description)}</div>` : ''}
@@ -93,35 +92,37 @@ async function publicarAnuncio() {
   const desc  = document.getElementById('input-desc').value.trim();
   const errEl = document.getElementById('modal-error');
 
-  if (!user)            { errEl.textContent = 'Faça login primeiro.'; errEl.classList.remove('hidden'); return; }
-  if (idx === '')       { errEl.textContent = 'Selecione um item.';   errEl.classList.remove('hidden'); return; }
+  errEl.classList.add('hidden');
+
+  if (!user)                { errEl.textContent = 'Faça login primeiro.';   errEl.classList.remove('hidden'); return; }
+  if (idx === '')           { errEl.textContent = 'Selecione um item.';     errEl.classList.remove('hidden'); return; }
   if (!price || price <= 0) { errEl.textContent = 'Informe um preço válido.'; errEl.classList.remove('hidden'); return; }
 
-  errEl.classList.add('hidden');
   const item = inventoryItems[parseInt(idx)];
 
-  const res = await fetch('/api/market-post', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      steam_id:  user.steam_id || user.steamid,
-      item_name: item.name,
-      item_icon: item.icon_url,
-      price_usd: price,
-      price_brl: (price * 5.0).toFixed(2),
-      description: desc,
-    }),
-  });
+  try {
+    const res = await fetch('/api/market-post', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        steam_id:    user.steam_id || user.steamid,
+        item_name:   item.name,
+        item_icon:   item.icon_url || '',
+        price_usd:   price,
+        price_brl:   (price * 5.0).toFixed(2),
+        description: desc,
+      }),
+    });
 
-  if (res.ok) {
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+
     fecharModal();
     await carregarAnuncios();
-  } else {
-    errEl.textContent = 'Erro ao publicar. Tente novamente.';
+  } catch (e) {
+    errEl.textContent = 'Erro: ' + e.message;
     errEl.classList.remove('hidden');
   }
 }
 
-if (document.querySelector('.section')) {
-  document.addEventListener('DOMContentLoaded', initMarketplace);
-}
+document.addEventListener('DOMContentLoaded', initMarketplace);
