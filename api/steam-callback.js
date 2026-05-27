@@ -1,53 +1,75 @@
-// api/steam-callback.js
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = () => createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
-
 export default async function handler(req, res) {
-  const rawUrl = req.url.includes("?") ? req.url : "/?";
-  const params = new URLSearchParams(rawUrl.split("?")[1] || "");
-  const claimed_id = params.get("openid.claimed_id") || "";
-  const steamId = claimed_id.match(/\/id\/(\d+)$/)?.[1];
+  try {
+    const fullUrl = `https://${req.headers.host}${req.url}`;
+    const params = new URLSearchParams(new URL(fullUrl).search);
+    const claimed_id = params.get("openid.claimed_id") || "";
+    const steamId = claimed_id.match(/\/id\/(\d+)$/)?.[1];
 
-  if (!steamId) return res.redirect("/?error=invalid_openid");
+    if (!steamId) return res.redirect("/?error=no_steamid");
 
-  const verifyParams = new URLSearchParams(params);
-  verifyParams.set("openid.mode", "check_authentication");
-  const verifyRes = await fetch("https://steamcommunity.com/openid/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: verifyParams.toString(),
-  });
-  const verifyText = await verifyRes.text();
-  if (!verifyText.includes("is_valid:true")) return res.redirect("/?error=openid_failed");
+    // Verificar com Steam
+    params.set("openid.mode", "check_authentication");
+    const verify = await fetch("https://steamcommunity.com/openid/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+    const text = await verify.text();
+    if (!text.includes("is_valid:true")) return res.redirect("/?error=invalid");
 
-  const profileRes = await fetch(
-    `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${process.env.STEAM_API_KEY}&steamids=${steamId}`
-  );
-  const profileData = await profileRes.json();
-  const player = profileData?.response?.players?.[0];
-  if (!player) return res.redirect("/?error=profile_not_found");
+    // Buscar perfil Steam
+    const pRes = await fetch(
+      `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${process.env.STEAM_API_KEY}&steamids=${steamId}`
+    );
+    const pData = await pRes.json();
+    const player = pData?.response?.players?.[0];
+    if (!player) return res.redirect("/?error=no_profile");
 
-  const db = supabase();
-  const { data: existing } = await db.from("players").select("*").eq("steam_id", steamId).single();
+    // Salvar no Supabase
+    const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+    await db.from("players").upsert({
+      steam_id: steamId,
+      nick: player.personaname,
+      avatar: player.avatarfull,
+      profile_url: player.profileurl,
+      last_login: Date.now(),
+    }, { onConflict: "steam_id", ignoreDuplicates: false });
 
-  const playerData = {
-    steam_id: steamId,
-    nick: player.personaname,
-    avatar: player.avatarfull,
-    profile_url: player.profileurl,
-    last_login: Date.now(),
-    ...(existing ? {} : {
-      elo: 0, kills: 0, deaths: 0, kd: "0.00", hs_percent: "0.0",
-      mvps: 0, hours: 0, steam_level: 0, inventory_value: 0,
-      fav_weapon: "N/D", wins: 0, created_at: Date.now()
-    }),
-  };
+    // Buscar stats CS2
+    const sRes = await fetch(
+      `https://api.steampowered.com/ISteamUserStats/GetUserStatsForGame/v2/?key=${process.env.STEAM_API_KEY}&steamid=${steamId}&appid=730`
+    );
+    if (sRes.ok) {
+      const sData = await sRes.json();
+      const stats = sData?.playerstats?.stats ?? [];
+      const g = (n) => stats.find(s => s.name === n)?.value ?? 0;
+      const kills = g("total_kills");
+      const deaths = g("total_deaths");
+      const hs = g("total_kills_headshot");
+      const kd = deaths > 0 ? (kills / deaths).toFixed(2) : "0.00";
+      const hsPercent = kills > 0 ? ((hs / kills) * 100).toFixed(1) : "0.0";
+      const lvlRes = await fetch(`https://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key=${process.env.STEAM_API_KEY}&steamid=${steamId}`);
+      const lvlData = await lvlRes.json();
+      const steam_level = lvlData?.response?.player_level ?? 0;
+      await db.from("players").update({
+        kills, deaths, kd, hs_percent: hsPercent,
+        mvps: g("total_mvps"), wins: g("total_wins"),
+        steam_level, last_updated: Date.now(),
+      }).eq("steam_id", steamId);
+    }
 
-  await db.from("players").upsert(playerData, { onConflict: "steam_id" });
+    // Redirecionar com dados do usuário na URL
+    const userData = encodeURIComponent(JSON.stringify({
+      steam_id: steamId,
+      nick: player.personaname,
+      avatar: player.avatarfull,
+    }));
+    return res.redirect(`/?login=${userData}`);
 
-  return res.redirect(`/perfil.html?steamid=${steamId}`);
+  } catch (err) {
+    console.error(err);
+    return res.redirect("/?error=server_error");
+  }
 }
