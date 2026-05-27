@@ -1,59 +1,80 @@
-// api/steam-inventory.js
 import { createClient } from "@supabase/supabase-js";
-
-const supabase = () => createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const { steamid } = req.query;
-  if (!steamid) return res.status(400).json({ error: "steamid required" });
+  try {
+    const { steamid } = req.query;
+    if (!steamid) return res.status(400).json({ error: "steamid required" });
 
-  // Cache na tabela inventory_cache
-  const db = supabase();
-  const { data: cached } = await db.from("inventory_cache").select("*").eq("steam_id", steamid).single();
-  if (cached && Date.now() - cached.updated_at < 3600000) {
-    return res.status(200).json({ items: cached.items, totalUSD: cached.total_usd, totalBRL: cached.total_brl });
-  }
+    const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
-  const invRes = await fetch(`https://steamcommunity.com/inventory/${steamid}/730/2?l=english&count=100`);
-  if (!invRes.ok) return res.status(200).json({ items: [], totalUSD: 0, totalBRL: 0 });
+    // Cache de 1h
+    const { data: cached } = await db.from("inventory_cache")
+      .select("*").eq("steam_id", steamid).single();
+    if (cached && Date.now() - cached.updated_at < 3600000) {
+      return res.status(200).json({ items: cached.items, totalUSD: cached.total_usd, totalBRL: cached.total_brl });
+    }
 
-  const invData = await invRes.json();
-  const assets = invData?.assets ?? [];
-  const descriptions = invData?.descriptions ?? [];
+    const invRes = await fetch(
+      `https://steamcommunity.com/inventory/${steamid}/730/2?l=english&count=100`
+    );
+    if (!invRes.ok) return res.status(200).json({ items: [], totalUSD: "0.00", totalBRL: "0.00" });
 
-  const descMap = {};
-  for (const d of descriptions) descMap[`${d.classid}_${d.instanceid}`] = d;
+    const invData = await invRes.json();
+    const assets  = invData?.assets ?? [];
+    const descs   = invData?.descriptions ?? [];
 
-  const itemNames = [];
-  for (const asset of assets.slice(0, 50)) {
-    const desc = descMap[`${asset.classid}_${asset.instanceid}`];
-    if (desc && desc.marketable) itemNames.push(desc.market_hash_name);
-  }
+    // Mapa de descrições
+    const descMap = {};
+    for (const d of descs) {
+      descMap[`${d.classid}_${d.instanceid}`] = d;
+    }
 
-  const USD_TO_BRL = 5.0;
-  const prices = {};
-  const chunks = [];
-  for (let i = 0; i < itemNames.length; i += 10) chunks.push(itemNames.slice(i, i + 10));
-  for (const chunk of chunks) {
-    await Promise.all(chunk.map(async (name) => {
+    // Montar itens com imagem
+    const items = [];
+    for (const asset of assets.slice(0, 50)) {
+      const desc = descMap[`${asset.classid}_${asset.instanceid}`];
+      if (!desc || !desc.marketable) continue;
+
+      // Buscar preço
+      let priceUSD = 0;
       try {
-        const r = await fetch(`https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name=${encodeURIComponent(name)}`);
-        const d = await r.json();
-        prices[name] = parseFloat((d?.lowest_price ?? "$0").replace(/[^0-9.]/g, "")) || 0;
-      } catch (_) { prices[name] = 0; }
-    }));
+        const pRes = await fetch(
+          `https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name=${encodeURIComponent(desc.market_hash_name)}`
+        );
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          priceUSD = parseFloat((pData?.lowest_price ?? "$0").replace(/[^0-9.]/g, "")) || 0;
+        }
+      } catch (_) {}
+
+      items.push({
+        name:      desc.market_hash_name,
+        icon_url:  desc.icon_url,
+        tags:      desc.tags ?? [],
+        price_usd: priceUSD,
+        price_brl: (priceUSD * 5.0).toFixed(2),
+      });
+    }
+
+    const totalUSD = items.reduce((s, i) => s + i.price_usd, 0).toFixed(2);
+    const totalBRL = (parseFloat(totalUSD) * 5.0).toFixed(2);
+
+    // Salvar cache
+    await db.from("inventory_cache").upsert({
+      steam_id:   steamid,
+      items,
+      total_usd:  totalUSD,
+      total_brl:  totalBRL,
+      updated_at: Date.now(),
+    }, { onConflict: "steam_id" });
+
+    // Atualizar valor no perfil
+    await db.from("players").update({ inventory_value: parseFloat(totalUSD) }).eq("steam_id", steamid);
+
+    return res.status(200).json({ items, totalUSD, totalBRL });
+  } catch (err) {
+    console.error("inventory error:", err);
+    return res.status(500).json({ error: err.message });
   }
-
-  const items = itemNames.map((name) => ({ name, priceUSD: prices[name] ?? 0, priceBRL: ((prices[name] ?? 0) * USD_TO_BRL).toFixed(2) }));
-  const totalUSD = items.reduce((s, i) => s + i.priceUSD, 0).toFixed(2);
-  const totalBRL = (parseFloat(totalUSD) * USD_TO_BRL).toFixed(2);
-
-  // Salvar cache
-  await db.from("inventory_cache").upsert({ steam_id: steamid, items, total_usd: totalUSD, total_brl: totalBRL, updated_at: Date.now() }, { onConflict: "steam_id" });
-
-  // Atualizar valor no perfil
-  await db.from("players").update({ inventory_value: parseFloat(totalUSD) }).eq("steam_id", steamid);
-
-  return res.status(200).json({ items, totalUSD, totalBRL });
 }
