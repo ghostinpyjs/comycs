@@ -6,35 +6,25 @@ export default async function handler(req, res) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
   
-  // Debug: mostrar se as variáveis existem
   if (!url || !key) {
-    return res.status(500).json({ 
-      error: "Variáveis faltando",
-      has_url: !!url,
-      has_key: !!key
-    });
+    return res.status(500).json({ error: "Variáveis faltando", has_url: !!url, has_key: !!key });
   }
 
   try {
     const db = createClient(url, key);
-    const { sort = "hours", page = "1", limit = "50" } = req.query;
-    const pageNum  = Math.max(1, parseInt(page));
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-    const validSort = ["elo","kd","kills","hours","steam_level","inventory_value"];
-    const sortCol = validSort.includes(sort) ? sort : "hours";
-    const from = (pageNum - 1) * limitNum;
-    const to   = from + limitNum - 1;
 
-    const { data: players, count, error } = await db
+    // Teste direto sem filtro
+    const { data, count, error } = await db
       .from("players")
-      .select("*", { count: "exact" })
-      .order(sortCol, { ascending: false })
-      .range(from, to);
+      .select("steam_id, nick", { count: "exact" });
 
-    if (error) return res.status(500).json({ error: error.message, details: error });
-
-    const ranked = (players || []).map((p, i) => ({ ...p, rank: from + i + 1 }));
-    return res.status(200).json({ players: ranked, total: count ?? 0 });
+    return res.status(200).json({ 
+      debug: true,
+      count,
+      rows: data,
+      error: error?.message || null,
+      url_start: url.substring(0, 30)
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
