@@ -1,18 +1,38 @@
+import {
+  Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder,
+  ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes,
+  ChannelType, PermissionFlagsBits, ComponentType
+} from "discord.js";
+import fetch from "node-fetch";
+
 const SITE_URL  = process.env.SITE_URL  || "https://cs2hubs.vercel.app";
 const TOKEN     = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
-
-// Diagnóstico — remover depois
-console.log("🔍 TOKEN definido?", !!TOKEN);
-console.log("🔍 CLIENT_ID definido?", !!CLIENT_ID);
-console.log("🔍 TOKEN começa com:", TOKEN?.substring(0, 10));
+const ORANGE    = 0xf0820f;
+const GREEN     = 0x00b894;
+const RED       = 0xe74c3c;
+const BLUE      = 0x3498db;
 
 if (!TOKEN) {
-  console.error("❌ DISCORD_TOKEN não está definido! Verifique as variáveis de ambiente no Railway.");
+  console.error("❌ DISCORD_TOKEN não definido!");
+  process.exit(1);
+}
+if (!CLIENT_ID) {
+  console.error("❌ DISCORD_CLIENT_ID não definido!");
   process.exit(1);
 }
 
-// Armazenar grupos ativos: messageId -> { leader, players, modo, vagas, channel }
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildVoiceStates,
+  ]
+});
+
 const gruposAtivos = new Map();
 
 const commands = [
@@ -105,10 +125,8 @@ async function getPlayer(nick) {
   return data.players?.[0] || null;
 }
 
-// Criar canal privado para o grupo
 async function criarCanalGrupo(guild, leader, players, modo, grupoId) {
   try {
-    // Criar ou pegar categoria LFG
     let categoria = guild.channels.cache.find(c =>
       c.type === ChannelType.GuildCategory && c.name === "🎮 CS2 GRUPOS"
     );
@@ -120,7 +138,6 @@ async function criarCanalGrupo(guild, leader, players, modo, grupoId) {
       });
     }
 
-    // Permissões — só o líder e jogadores aceitos veem
     const permissoes = [
       {
         id: guild.roles.everyone.id,
@@ -164,7 +181,6 @@ client.once("ready", async () => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
-  // ─── Botões dos grupos LFG ──────────────────────────────
   if (interaction.isButton()) {
     const [acao, grupoId] = interaction.customId.split("_");
     const grupo = gruposAtivos.get(grupoId);
@@ -186,7 +202,6 @@ client.on("interactionCreate", async interaction => {
 
       await interaction.reply({ content: `✅ **${interaction.user.username}** entrou no grupo!`, ephemeral: false });
 
-      // Se grupo lotou, criar canal
       if (grupo.players.length >= grupo.vagas) {
         const canal = await criarCanalGrupo(
           interaction.guild,
@@ -207,9 +222,9 @@ client.on("interactionCreate", async interaction => {
             .setDescription(`${mencoes}\n\nSeu grupo está pronto! Use este canal para combinar a partida.`)
             .setColor(GREEN)
             .addFields(
-              { name: "🎯 Modo",     value: grupo.modo,                    inline: true },
-              { name: "👥 Jogadores", value: `${todosJogadores.length}`,   inline: true },
-              { name: "🔗 Site",     value: `[CS2HUB](${SITE_URL})`,       inline: true },
+              { name: "🎯 Modo",      value: grupo.modo,                  inline: true },
+              { name: "👥 Jogadores", value: `${todosJogadores.length}`,  inline: true },
+              { name: "🔗 Site",      value: `[CS2HUB](${SITE_URL})`,     inline: true },
             )
             .setFooter({ text: "Canal deletado automaticamente em 2 horas" })
             .setTimestamp();
@@ -223,12 +238,10 @@ client.on("interactionCreate", async interaction => {
 
           await canal.send({ content: mencoes, embeds: [embedCanal], components: [rowCanal] });
 
-          // Auto-deletar em 2 horas
           setTimeout(async () => {
             try { await canal.delete(); } catch (_) {}
           }, 7200000);
 
-          // Atualizar mensagem original
           try {
             const msg = await interaction.channel.messages.fetch(grupo.messageId);
             const embedAtualizado = new EmbedBuilder()
@@ -243,7 +256,6 @@ client.on("interactionCreate", async interaction => {
 
     else if (acao === "sair") {
       if (interaction.user.id === grupo.leader.id) {
-        // Líder cancelou
         gruposAtivos.delete(grupoId);
         const embedCancelado = new EmbedBuilder()
           .setTitle("❌ Grupo cancelado")
@@ -276,13 +288,11 @@ client.on("interactionCreate", async interaction => {
 
   const { commandName } = interaction;
 
-  // ─── /ping ─────────────────────────────────────────────
   if (commandName === "ping") {
     const latencia = Date.now() - interaction.createdTimestamp;
     await interaction.reply(`🏓 Pong! Latência: **${latencia}ms** | API: **${client.ws.ping}ms**`);
   }
 
-  // ─── /ranking ──────────────────────────────────────────
   else if (commandName === "ranking") {
     await interaction.deferReply();
     try {
@@ -291,9 +301,9 @@ client.on("interactionCreate", async interaction => {
       const players = data.players || [];
       if (!players.length) return interaction.editReply("Nenhum jogador no ranking ainda.");
 
-      const medals    = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
-      const nomes     = { hours: "Horas", kd: "K/D", kills: "Kills", wins: "Vitórias", steam_level: "Nível Steam", inventory_value: "Inventário" };
-      const desc      = players.map((p, i) =>
+      const medals  = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
+      const nomes   = { hours: "Horas", kd: "K/D", kills: "Kills", wins: "Vitórias", steam_level: "Nível Steam", inventory_value: "Inventário" };
+      const desc    = players.map((p, i) =>
         `${medals[i]} **${p.nick}** — ${p.hours}h | K/D: ${p.kd} | Nível: ${p.steam_level}`
       ).join("\n");
 
@@ -315,7 +325,6 @@ client.on("interactionCreate", async interaction => {
     }
   }
 
-  // ─── /jogador ──────────────────────────────────────────
   else if (commandName === "jogador") {
     await interaction.deferReply();
     const nick = interaction.options.getString("nick");
@@ -332,15 +341,15 @@ client.on("interactionCreate", async interaction => {
         .setColor(ORANGE)
         .setURL(`${SITE_URL}/jogador.html?id=${p.steam_id}`)
         .addFields(
-          { name: "⏱ Horas CS2",       value: `${p.hours}h`,                          inline: true },
-          { name: `${kdEmoji} K/D`,     value: `${p.kd}`,                              inline: true },
-          { name: "🎮 Nível Steam",      value: `${p.steam_level}`,                    inline: true },
-          { name: "💀 Kills",            value: `${(p.kills||0).toLocaleString()}`,    inline: true },
-          { name: "🏆 Vitórias",         value: `${(p.wins||0).toLocaleString()}`,     inline: true },
-          { name: "🎯 Headshot %",       value: `${p.hs_percent}%`,                    inline: true },
-          { name: "⭐ MVPs",             value: `${p.mvps||0}`,                        inline: true },
-          { name: "🔫 Arma Favorita",    value: `${p.fav_weapon||"N/D"}`,              inline: true },
-          { name: "💰 Inventário",       value: `$${(p.inventory_value||0).toFixed(2)}`, inline: true },
+          { name: "⏱ Horas CS2",    value: `${p.hours}h`,                            inline: true },
+          { name: `${kdEmoji} K/D`,  value: `${p.kd}`,                                inline: true },
+          { name: "🎮 Nível Steam",  value: `${p.steam_level}`,                       inline: true },
+          { name: "💀 Kills",        value: `${(p.kills||0).toLocaleString()}`,        inline: true },
+          { name: "🏆 Vitórias",     value: `${(p.wins||0).toLocaleString()}`,         inline: true },
+          { name: "🎯 Headshot %",   value: `${p.hs_percent}%`,                        inline: true },
+          { name: "⭐ MVPs",         value: `${p.mvps||0}`,                            inline: true },
+          { name: "🔫 Arma Favorita",value: `${p.fav_weapon||"N/D"}`,                 inline: true },
+          { name: "💰 Inventário",   value: `$${(p.inventory_value||0).toFixed(2)}`,  inline: true },
         )
         .setFooter({ text: `SteamID: ${p.steam_id}` })
         .setTimestamp();
@@ -356,7 +365,6 @@ client.on("interactionCreate", async interaction => {
     }
   }
 
-  // ─── /marketplace ──────────────────────────────────────
   else if (commandName === "marketplace") {
     await interaction.deferReply();
     try {
@@ -399,13 +407,12 @@ client.on("interactionCreate", async interaction => {
     }
   }
 
-  // ─── /lfg ──────────────────────────────────────────────
   else if (commandName === "lfg") {
-    const modo  = interaction.options.getString("modo");
-    const rank  = interaction.options.getString("rank")   || "Não informado";
-    const vagas = interaction.options.getInteger("vagas") || 1;
-    const obs   = interaction.options.getString("obs")    || "";
-    const user  = interaction.user;
+    const modo    = interaction.options.getString("modo");
+    const rank    = interaction.options.getString("rank")   || "Não informado";
+    const vagas   = interaction.options.getInteger("vagas") || 1;
+    const obs     = interaction.options.getString("obs")    || "";
+    const user    = interaction.user;
     const grupoId = Date.now().toString(36);
 
     const embed = new EmbedBuilder()
@@ -413,11 +420,11 @@ client.on("interactionCreate", async interaction => {
       .setColor(GREEN)
       .setThumbnail(user.displayAvatarURL())
       .addFields(
-        { name: "👑 Líder",      value: `<@${user.id}>`,        inline: true },
-        { name: "🎯 Modo",       value: modo,                    inline: true },
-        { name: "📊 Rank/ELO",   value: rank,                    inline: true },
-        { name: "🪑 Vagas",      value: `0/${vagas}`,            inline: true },
-        { name: "👥 No grupo",   value: `<@${user.id}>`,         inline: false },
+        { name: "👑 Líder",    value: `<@${user.id}>`, inline: true },
+        { name: "🎯 Modo",     value: modo,             inline: true },
+        { name: "📊 Rank/ELO", value: rank,             inline: true },
+        { name: "🪑 Vagas",    value: `0/${vagas}`,     inline: true },
+        { name: "👥 No grupo", value: `<@${user.id}>`,  inline: false },
       )
       .setDescription(obs ? `> ${obs}` : "Clique em **Entrar** para participar!\nQuando o grupo encher, um canal privado será criado automaticamente.")
       .setFooter({ text: `ID do grupo: ${grupoId} • Expira em 30 min` })
@@ -444,7 +451,6 @@ client.on("interactionCreate", async interaction => {
       messageId: msg.id,
     });
 
-    // Auto-expirar em 30 minutos
     setTimeout(async () => {
       if (!gruposAtivos.has(grupoId)) return;
       gruposAtivos.delete(grupoId);
@@ -458,7 +464,6 @@ client.on("interactionCreate", async interaction => {
     }, 1800000);
   }
 
-  // ─── /stats ────────────────────────────────────────────
   else if (commandName === "stats") {
     await interaction.deferReply();
     const nick1 = interaction.options.getString("jogador1");
@@ -474,7 +479,7 @@ client.on("interactionCreate", async interaction => {
         .setTitle(`⚔️ ${p1.nick} vs ${p2.nick}`)
         .setColor(ORANGE)
         .addFields(
-          { name: "📊 Stat",        value: "K/D\nHoras\nKills\nVitórias\nHeadshot %\nInventário\nNível Steam", inline: true },
+          { name: "📊 Stat", value: "K/D\nHoras\nKills\nVitórias\nHeadshot %\nInventário\nNível Steam", inline: true },
           { name: p1.nick, value: [
             `${c(p1.kd,p2.kd)} ${p1.kd}`,
             `${c(p1.hours,p2.hours)} ${p1.hours}h`,
@@ -503,7 +508,6 @@ client.on("interactionCreate", async interaction => {
     }
   }
 
-  // ─── /top ──────────────────────────────────────────────
   else if (commandName === "top") {
     await interaction.deferReply();
     const cat = interaction.options.getString("categoria");
@@ -513,7 +517,7 @@ client.on("interactionCreate", async interaction => {
       if (!players.length) return interaction.editReply("Nenhum jogador ainda.");
 
       const p = players[0];
-      const nomes  = { hours: "Mais Horas", kd: "Melhor K/D", kills: "Mais Kills", wins: "Mais Vitórias", inventory_value: "Inventário Mais Valioso" };
+      const nomes   = { hours: "Mais Horas", kd: "Melhor K/D", kills: "Mais Kills", wins: "Mais Vitórias", inventory_value: "Inventário Mais Valioso" };
       const valores = { hours: `${p.hours}h`, kd: p.kd, kills: (p.kills||0).toLocaleString(), wins: (p.wins||0).toLocaleString(), inventory_value: `$${(p.inventory_value||0).toFixed(2)}` };
 
       const embed = new EmbedBuilder()
@@ -534,7 +538,6 @@ client.on("interactionCreate", async interaction => {
     }
   }
 
-  // ─── /site ─────────────────────────────────────────────
   else if (commandName === "site") {
     const embed = new EmbedBuilder()
       .setTitle("🎮 CS2HUB")
