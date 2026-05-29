@@ -35,7 +35,7 @@
   <ul class="nav-links">
     <li><a href="/">Home</a></li>
     <li><a href="/ranking.html">Ranking</a></li>
-    <li><a href="/marketplace.html" class="active">Marketplace</a></li>
+    <li><a href="/jogador.html">Pesquisar</a></li>
   </ul>
   <form class="nav-search" id="nav-search-form">
     <input id="nav-search-input" type="text" placeholder="Buscar jogador...">
@@ -43,7 +43,6 @@
   </form>
   <div id="nav-login-area"></div>
 </nav>
-
 <main style="position:relative;z-index:1">
   <div class="section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
@@ -53,18 +52,15 @@
       </div>
       <button class="btn btn-primary" id="btn-anunciar" onclick="abrirModal()" style="display:none">+ Anunciar Item</button>
     </div>
-
     <div class="filter-bar">
       <input id="market-search" type="text" placeholder="Buscar item...">
     </div>
-
     <div id="market-loading" class="loading-wrap"><div class="spinner"></div><span class="loading-text">Carregando anúncios...</span></div>
     <div id="market-empty" class="hidden"><div class="empty-state"><div class="empty-icon">🏪</div><p>Nenhum anúncio ainda. Seja o primeiro!</p></div></div>
     <div id="market-grid" class="market-grid"></div>
   </div>
 </main>
 
-<!-- Modal anunciar -->
 <div class="modal-overlay" id="modal-anunciar">
   <div class="modal">
     <button class="modal-close" onclick="fecharModal()">✕</button>
