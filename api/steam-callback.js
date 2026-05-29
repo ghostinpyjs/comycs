@@ -48,20 +48,42 @@ export default async function handler(req, res) {
     const games      = hData?.response?.games ?? [];
     const cs2        = games.find(g => g.appid === 730);
     const hours      = cs2 ? Math.round(cs2.playtime_forever / 60) : 0;
-    const weapons    = ["ak47","m4a1","awp","deagle","glock","usp_silencer","p250","famas","galil","sg556","aug","ssg08"];
-    let favWeapon    = "N/D";
-    let favKills     = 0;
+
+    const weapons = ["ak47","m4a1","awp","deagle","glock","usp_silencer","p250","famas","galil","sg556","aug","ssg08"];
+    let favWeapon = "N/D";
+    let favKills  = 0;
     for (const w of weapons) {
       const k = g(`total_kills_${w}`);
       if (k > favKills) { favKills = k; favWeapon = w.toUpperCase(); }
     }
 
-    const db = getDB();
-    const { error } = await db.from("players").upsert({
-      steam_id:    steamId,
-      nick:        player.personaname,
-      avatar:      player.avatarfull,
-      profile_url: player.profileurl,
-      steam_level: steamLevel,
+    const { error } = await getDB().from("players").upsert({
+      steam_id:     steamId,
+      nick:         player.personaname,
+      avatar:       player.avatarfull,
+      profile_url:  player.profileurl,
+      steam_level:  steamLevel,
       kills, deaths, kd,
-      hs_perc
+      hs_percent:   hsPercent,
+      mvps:         g("total_mvps"),
+      wins:         g("total_wins"),
+      fav_weapon:   favWeapon,
+      hours,
+      elo:          0,
+      last_login:   Date.now(),
+      last_updated: Date.now(),
+    }, { onConflict: "steam_id" });
+
+    if (error) console.error("Supabase error:", error.message);
+
+    const userData = encodeURIComponent(JSON.stringify({
+      steam_id: steamId,
+      nick:     player.personaname,
+      avatar:   player.avatarfull,
+    }));
+    return res.redirect(`/?login=${userData}`);
+  } catch (err) {
+    console.error("callback error:", err.message);
+    return res.redirect("/?error=server_error");
+  }
+}
