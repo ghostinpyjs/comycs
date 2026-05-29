@@ -1,4 +1,3 @@
-// admin.js
 const ADMIN_ID = "76561199851942884";
 let allPlayers  = [];
 let allListings = [];
@@ -37,14 +36,16 @@ async function loadStats() {
     const totalVal = players.reduce((s, p) => s + (p.inventory_value || 0), 0);
     const banned   = players.filter(p => p.banned).length;
     const avgHours = players.length ? Math.round(players.reduce((s,p) => s + (p.hours||0), 0) / players.length) : 0;
+    const topKD    = players.sort((a,b) => parseFloat(b.kd||0) - parseFloat(a.kd||0))[0];
 
     document.getElementById('admin-stats').innerHTML = `
       <div class="stat-box"><div class="stat-box-num">${players.length}</div><div class="stat-box-label">Jogadores</div></div>
-      <div class="stat-box"><div class="stat-box-num">${banned}</div><div class="stat-box-label">Banidos</div></div>
+      <div class="stat-box"><div class="stat-box-num" style="color:var(--red)">${banned}</div><div class="stat-box-label">Banidos</div></div>
       <div class="stat-box"><div class="stat-box-num">${listings.length}</div><div class="stat-box-label">Anúncios Total</div></div>
-      <div class="stat-box"><div class="stat-box-num">${active}</div><div class="stat-box-label">Anúncios Ativos</div></div>
+      <div class="stat-box"><div class="stat-box-num" style="color:var(--green)">${active}</div><div class="stat-box-label">Anúncios Ativos</div></div>
       <div class="stat-box"><div class="stat-box-num">$${totalVal.toFixed(0)}</div><div class="stat-box-label">Val. Inventários</div></div>
       <div class="stat-box"><div class="stat-box-num">${avgHours}h</div><div class="stat-box-label">Média de Horas</div></div>
+      ${topKD ? `<div class="stat-box"><div class="stat-box-num" style="font-size:1rem">${escHtml(topKD.nick)}</div><div class="stat-box-label">Melhor K/D (${topKD.kd})</div></div>` : ''}
     `;
   } catch (e) { console.error(e); }
 }
@@ -62,22 +63,25 @@ function renderPlayers(players) {
   const tbody = document.getElementById('admin-players-tbody');
   if (!tbody) return;
   if (!players.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim)">Nenhum jogador.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:2rem">Nenhum jogador.</td></tr>';
     return;
   }
   tbody.innerHTML = players.map(p => `
-    <tr>
+    <tr style="${p.banned ? 'opacity:.5' : ''}">
       <td>
         <div style="display:flex;align-items:center;gap:.6rem">
-          <img src="${p.avatar||''}" style="width:32px;height:32px;border-radius:4px"
+          <img src="${p.avatar||''}" style="width:32px;height:32px;border-radius:4px;flex-shrink:0"
                onerror="this.src='https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_medium.jpg'">
-          <a href="/jogador.html?id=${p.steam_id}" style="color:var(--text-primary)">${escHtml(p.nick)}</a>
+          <div>
+            <a href="/jogador.html?id=${p.steam_id}" style="color:var(--text-primary);font-weight:600">${escHtml(p.nick)}</a>
+            <div style="font-size:.72rem;color:var(--text-dim);font-family:monospace">${p.steam_id}</div>
+          </div>
         </div>
       </td>
-      <td style="font-family:monospace;font-size:.78rem;color:var(--text-dim)">${p.steam_id}</td>
       <td>${p.hours || 0}h</td>
-      <td>${p.kd || '—'}</td>
+      <td style="color:${parseFloat(p.kd||0)>=1.2?'var(--green)':parseFloat(p.kd||0)<=0.85?'var(--red)':'var(--text-primary)'}">${p.kd || '—'}</td>
       <td>$${(p.inventory_value||0).toFixed(2)}</td>
+      <td style="font-size:.8rem;color:var(--text-dim)">${p.last_login ? new Date(p.last_login).toLocaleDateString('pt-BR') : '—'}</td>
       <td><span class="${p.banned ? 'badge-banned' : 'badge-active'}">${p.banned ? '⛔ BANIDO' : '✓ ATIVO'}</span></td>
       <td style="display:flex;gap:.4rem;flex-wrap:wrap">
         ${p.steam_id !== ADMIN_ID ? `
@@ -105,7 +109,7 @@ function renderListings(listings) {
   const tbody = document.getElementById('admin-market-tbody');
   if (!tbody) return;
   if (!listings.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">Nenhum anúncio.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:2rem">Nenhum anúncio.</td></tr>';
     return;
   }
   tbody.innerHTML = listings.map(l => `
@@ -117,54 +121,7 @@ function renderListings(listings) {
         </div>
       </td>
       <td style="font-size:.8rem">${escHtml(l.nick || l.steam_id)}</td>
-      <td><span style="color:var(--orange);font-weight:700">$${parseFloat(l.price_usd).toFixed(2)}</span></td>
+      <td><span style="color:var(--orange);font-weight:700">$${parseFloat(l.price_usd||0).toFixed(2)}</span></td>
       <td><span class="${l.status==='active'?'badge-active':'badge-banned'}">${l.status==='active'?'✓ Ativo':'✕ Removido'}</span></td>
       <td style="font-size:.8rem;color:var(--text-dim)">${l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '—'}</td>
-      <td>${l.status==='active' ? `<button class="btn-danger" onclick="removeListing('${l.id}')">Remover</button>` : '—'}</td>
-    </tr>
-  `).join('');
-}
-
-async function toggleBan(steamId, ban) {
-  if (!confirm(`${ban?'Banir':'Desbanir'} este jogador?`)) return;
-  await fetch('/api/admin-action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'ban', steam_id: steamId, value: ban, admin_id: ADMIN_ID }),
-  });
-  await loadPlayers();
-  await loadStats();
-}
-
-async function deletePlayer(steamId) {
-  if (!confirm('Deletar permanentemente?')) return;
-  await fetch('/api/admin-action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'delete', steam_id: steamId, admin_id: ADMIN_ID }),
-  });
-  await loadPlayers();
-  await loadStats();
-}
-
-async function removeListing(id) {
-  if (!confirm('Remover este anúncio?')) return;
-  await fetch('/api/admin-action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'remove_listing', id, admin_id: ADMIN_ID }),
-  });
-  await loadListings();
-  await loadStats();
-}
-
-function showTab(tab) {
-  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById(`tab-${tab}`)?.classList.add('active');
-}
-
-if (document.getElementById('admin-page')) {
-  document.addEventListener('DOMContentLoaded', initAdmin);
-}
+      <td>${l.status==='activ
